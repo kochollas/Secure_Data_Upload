@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Upload to S3</title>
+</head>
+<body>
+  <h3> DATA SCIENCE WITHOUT BORDERS (DSWB) </h3>
+  <h4>SECURE DATA UPLOAD LINK - Valid for 24 HRS</h4>
+  <input type="file" id="fileInput" />
+  <button onclick="upload()">Upload</button>
+</body>
+  <script>
+    async function upload() {
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+      if (!file) {
+        alert("Please select a file first.");
+        return;
+      }
+
+      try {
+        // Step 1: Get pre-signed URL from Flask
+        const getUrlResponse = await fetch('http://127.0.0.1:5000/generate-upload-url', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            filename: file.name,
+            contentType: file.type
+          })
+        });
+
+        const data = await getUrlResponse.json();
+
+        if (!getUrlResponse.ok) {
+          throw new Error(data.error || "Failed to get upload URL");
+        }
+
+        const presignedUrl = data.uploadUrl;
+
+        // Step 2: Upload the file directly to S3
+        const uploadResponse = await fetch(presignedUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': file.type
+          },
+          body: file
+        });
+
+        if (uploadResponse.ok) {
+          alert("File uploaded to S3 successfully!");
+        } else {
+          alert("Upload to S3 failed.");
+        }
+
+      } catch (err) {
+        alert("Error uploading file: " + err.message);
+        console.error(err);
+      }
+    }
+  </script>
+</html>
+

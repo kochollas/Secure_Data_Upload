@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Upload to S3</title>
+  <style>
+    #progressContainer {
+      width: 50%;
+      height: 25px;
+      background-color: #f3f3f3;
+      border-radius: 5px;
+      margin-top: 10px;
+    }
+
+    #progressBar {
+      width: 0%;
+      height: 100%;
+      background-color: #4caf50;
+      text-align: center;
+      line-height: 25px;
+      color: white;
+      border-radius: 5px;
+    }
+    #bd {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f9f9f9;
+  margin: 0;
+  padding: 40px;
+  color: #333;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+  background: white;
+  margin-top:20px;
+}
+
+    #countdown {
+      font-weight: bold;
+      color: #c0392b;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body id = "bd">
+  <h3 align="center">DATA SCIENCE WITHOUT BORDERS (DSWB)</h3>
+  <h4 align="center">SECURE DATA UPLOAD LINK - <p id="countdown">Loading countdown...</p></h4>
+  <br>
+  <div align="center">
+  <input type="file" id="fileInput" /> 
+  <button onclick="upload()">Upload</button><br>
+
+  <div id="progressContainer">
+    <div id="progressBar">0%</div>
+  </div>
+  </div>
+  <p align="center" id="status"></p>
+  </body>
+  <script>
+
+  // Time countdown before Link Expires
+
+  const countdownEl = document.getElementById('countdown');
+  const deadline = new Date().getTime() + 24 * 60 * 60 * 1000; // 24 hours from now
+
+  const countdownInterval = setInterval(() => {
+    const now = new Date().getTime();
+    const remaining = deadline - now;
+
+    if (remaining <= 0) {
+      clearInterval(countdownInterval);
+      countdownEl.innerText = "Link expired!";
+      return;
+    }
+
+    const hours = Math.floor((remaining / (1000 * 60 * 60)) % 24);
+    const minutes = Math.floor((remaining / (1000 * 60)) % 60);
+    const seconds = Math.floor((remaining / 1000) % 60);
+
+    countdownEl.innerText = `Time remaining: ${hours}h ${minutes}m ${seconds}s`;
+  }, 1000);
+
+  // Actual interaction with AWS APIs
+
+    async function upload() {
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+      const progressBar = document.getElementById('progressBar');
+      const statusText = document.getElementById('status');
+
+      if (!file) {
+        alert("Please select a file first.");
+        return;
+      }
+
+      try {
+        // Step 1: Get pre-signed URL from Flask
+        const getUrlResponse = await fetch('http://127.0.0.1:5000/generate-upload-url', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            filename: file.name,
+            contentType: file.type
+          })
+        });
+
+        const data = await getUrlResponse.json();
+
+        if (!getUrlResponse.ok) {
+          throw new Error(data.error || "Failed to get upload URL");
+        }
+
+        const presignedUrl = data.uploadUrl;
+
+        // Step 2: Upload file using XMLHttpRequest to enable progress tracking
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", presignedUrl, true);
+        xhr.setRequestHeader("Content-Type", file.type);
+
+        xhr.upload.onprogress = function (event) {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            progressBar.style.width = percent + "%";
+            progressBar.textContent = percent + "%";
+          }
+        };
+
+        xhr.onload = function () {
+          if (xhr.status === 200) {
+            statusText.textContent = "File Securely uploaded. Thank you!";
+          } else {
+            statusText.textContent = "Upload failed: Ensure file is zipped if too big " + xhr.statusText;
+          }
+        };
+
+        xhr.onerror = function () {
+          statusText.textContent = "Network error during upload.";
+        };
+
+        xhr.send(file);
+
+      } catch (err) {
+        alert("Error uploading file: " + err.message);
+        console.error(err);
+      }
+    }
+  </script>
+</html>
+
